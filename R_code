@@ -1,0 +1,71 @@
+X=read.csv("C:/Users/cb241193/OneDrive - Queen Mary, University of London/Documents/glass.data", header=FALSE)
+colnames(X)<-c("RI","Na","Mg","Al","Si","K","Ca","Ba","Fe","Type")
+
+Y<-X[,11]; X<-X[,-1]
+dim(X)
+X<-scale(x=X, center = TRUE, scale = TRUE)
+(Y==7)*1->Y; X[,10]<-Y
+
+colnames(X)<-c("RI","Na","Mg","Al","Si","K","Ca","Ba","Fe","Type")
+Y[Y==1]<-"Yes"; Y[Y==0]<-"No"
+
+DAT<-data.frame(X,factor(Y)); colnames(DAT)[11]<-"Y"
+attach(DAT)
+
+library(cvTools)
+set.seed(0);
+n<-nrow(X); K<-3;
+cvFolds(n=n,K=K)->CV
+CV$subsets[CV$which!=K]->Train;
+CV$subsets[CV$which==K]->Test
+
+M1<-glm(Type~.,data=DAT[Train,-11],family="binomial")
+P1<-predict.glm(M1,newdata = DAT[Test,],type="response")
+
+summary(M1)
+
+M11<-glm(Type~.-RI-Fe,data=DAT[Train,-11],family="binomial")
+P11<-predict.glm(M11,newdata = DAT[Test,],type="response")
+
+summary(M11)
+
+library(class)
+M2<-knn(train = X[Train,1:9],test = X[Test,1:9],cl = Y[Train],k = 3)
+
+library(tree)
+M3<-tree(Y~.,DAT[Train,-10])
+P3<-predict(M3,DAT[Test,],type="class")
+
+library(MASS)
+M4<-lda(Type~.,data=DAT[Train,-11])
+P4<-predict(M4,DAT[Test,])
+
+library(pROC)
+roc(response=Type[Test],predictor=P1)->R1
+roc(response=Type[Test],predictor=P11)->R11
+roc(response=Type[Test],predictor=c(P4$x))->R4
+
+(table(Y[Test],M2)->T2) ## KNN
+
+T2[2,2]/sum(T2[2,])->TPR2; T2[1,2]/sum(T2[1,])->FPR2
+(table(Type[Test],P3)->T3) ## Tree
+
+T3[2,2]/sum(T3[2,])->TPR3; T3[1,2]/sum(T3[1,])->FPR3
+
+plot(R1,col="black",main="ROC glass data")
+plot(R11,col="grey",add=TRUE)
+plot(R4,add=TRUE,col="blue")
+points(1-FPR2,TPR2,col="red",pch=16)
+points(1-FPR3,TPR3,col="green",pch=16)
+
+auc(R1) ## logistic with all variables
+# Area under the curve: 0.9802
+
+auc(R11) ## logistic with subset of variables
+# Area under the curve: 0.9405
+
+auc(R4) ## linear discriminant classifier
+# Area under the curve: 0.8889
+
+plot(M3)
+text(M3,pretty=0,cex=0.5)
